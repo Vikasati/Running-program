@@ -7,10 +7,228 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 text-gray-900">
-  <div class="max-w-3xl mx-auto px-4 py-12">
-    <h1 class="text-4xl font-bold text-center text-[#2D4946] mb-4">Vikasati Running Program</h1>
-    <p class="text-center text-lg mb-8">Structured 5K and 10K plans for beginner to experienced runners. Choose your pace, terrain, and session frequency.</p>
-    <p class="text-center text-sm text-gray-500">This is a static placeholder. Final version includes dynamic RPE + pace sessions, dropdowns, and weekly cards.</p>
+  <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+
+    <header class="text-center my-8 md:my-12">
+      <h1 class="text-4xl md:text-6xl font-black text-[#FFC40B] leading-tight">Vikasati Running Program</h1>
+      <p class="text-xl md:text-2xl mt-2 text-[#2D4946] font-semibold">Optional Conditioning Resource: Build toward a 5K or 10K</p>
+    </header>
+
+    <section class="bg-white p-6 md:p-8 rounded-xl shadow-lg my-12">
+      <h2 class="text-2xl md:text-3xl font-bold text-center mb-6">Customize Your Plan</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div>
+          <label class="block text-sm font-medium text-[#2D4946] mb-1">Distance Goal</label>
+          <select id="distanceSelect" class="w-full p-3 border border-gray-300 rounded-md">
+            <option value="5k">5K</option>
+            <option value="10k">10K</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-[#2D4946] mb-1">Sessions Per Week</label>
+          <select id="sessionsPerWeek" class="w-full p-3 border border-gray-300 rounded-md">
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-[#2D4946] mb-1">Terrain</label>
+          <select id="terrainType" class="w-full p-3 border border-gray-300 rounded-md">
+            <option value="flat">Flat</option>
+            <option value="hilly">Hilly</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-[#2D4946] mb-1">Runner Experience Level</label>
+          <select id="experienceLevel" class="w-full p-3 border border-gray-300 rounded-md">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="experienced">Experienced</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="currentTime" class="block text-sm font-medium text-[#2D4946] mb-1">Current Time (MM:SS or 0)</label>
+          <input type="text" id="currentTime" class="w-full p-3 border border-gray-300 rounded-md" placeholder="e.g., 30:00 or 0" />
+          <p id="currentTimeError" class="text-red-500 text-xs mt-1"></p>
+        </div>
+
+        <div>
+          <label for="goalTime" class="block text-sm font-medium text-[#2D4946] mb-1">Goal Time (MM:SS)</label>
+          <input type="text" id="goalTime" class="w-full p-3 border border-gray-300 rounded-md" placeholder="e.g., 26:00" />
+          <p id="goalTimeError" class="text-red-500 text-xs mt-1"></p>
+        </div>
+      </div>
+
+      <div class="text-center mt-8">
+        <button id="generateProgramBtn" class="bg-[#FFC40B] hover:bg-[#2D4946] text-[#2D4946] hover:text-white font-bold py-3 px-6 rounded-lg shadow-md">Generate Program</button>
+      </div>
+    </section>
+
+    <section id="summaryPanel" class="hidden text-center text-[#2D4946] mb-8">
+      <div class="text-lg font-semibold">You selected: <span id="summaryText"></span></div>
+      <div class="text-sm">Your plan includes warm-up/cool-down and evidence-based pacing + RPE for 6 weeks.</div>
+    </section>
+
+    <section id="programOutputSection" class="bg-white p-4 md:p-6 rounded-xl shadow-lg my-12 hidden">
+      <h2 class="text-2xl md:text-3xl font-bold text-center mb-6">Your Weekly Run Sessions</h2>
+      <div id="programCardsContainer" class="space-y-6"></div>
+      <p class="text-sm text-center text-[#2D4946] mt-6">Each session includes: 5–10 min warm-up jog/walk + 5–10 min cool-down. Adjust based on feel and terrain.</p>
+    </section>
   </div>
+
+  <script>
+    function parseTimeToSeconds(timeStr) {
+      if (timeStr === '0' || timeStr === '00:00') return 0;
+      const parts = timeStr.split(':');
+      if (parts.length !== 2) return NaN;
+      const [min, sec] = parts.map(Number);
+      return isNaN(min) || isNaN(sec) ? NaN : min * 60 + sec;
+    }
+
+    function formatSecondsToPace(secPerKm) {
+      const m = Math.floor(secPerKm / 60);
+      const s = secPerKm % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function formatMinutes(min) {
+      return `${min} min`;
+    }
+
+    function getRPELabel(rpe) {
+      const label = {5:'Steady',6:'Comfortable',7:'Challenging',8:'Hard',9:'Very hard'}[rpe] || 'Unknown';
+      return `RPE ${rpe} - ${label}`;
+    }
+
+    function getIntervalDescription(week, level) {
+      const intervals = {
+        beginner: [
+          '4 x 1 min run, 1 min walk',
+          '4 x 2 min run, 1 min walk',
+          '3 x 3 min run, 1 min walk',
+          '4 x 3 min run, 1 min walk',
+          '4 x 4 min run, 1 min jog',
+          '2 x 5 min run, 1 min jog'
+        ],
+        intermediate: [
+          '4 x 2 min hard, 1 min walk',
+          '4 x 3 min hard, 1 min walk',
+          '5 x 3 min hard, 1 min walk',
+          '4 x 4 min hard, 1 min jog',
+          '3 x 5 min hard, 1 min jog',
+          '2 x 6 min hard, 1 min jog'
+        ],
+        experienced: [
+          '4 x 3 min @ threshold, 1 min jog',
+          '5 x 4 min @ 5K pace, 1 min jog',
+          '3 x 6 min @ 10K pace, 2 min jog',
+          '2 x 8 min @ threshold, 2 min jog',
+          '5 x 3 min fartlek, 1 min jog',
+          '3 x 5 min threshold, 1 min jog'
+        ]
+      };
+      const arr = intervals[level];
+      return arr[Math.min(week - 1, arr.length - 1)];
+    }
+
+    function generateRunPlan(distance, sessions, terrain, level, currentSec, goalSec) {
+      const plan = [];
+      const weeks = 6;
+      const hillAdj = terrain === 'hilly' ? 1 : 0;
+      const effPace = currentSec ? currentSec / (distance === '10k' ? 10 : 5) : 420;
+      const goalPace = goalSec / (distance === '10k' ? 10 : 5);
+
+      for (let w = 1; w <= weeks; w++) {
+        const weekSessions = [];
+        for (let s = 1; s <= +sessions; s++) {
+          let desc = '', icon = '', rpe = 6, pace = effPace;
+          if (s === 1) {
+            desc = distance === '10k' ? 'Long Run' : 'Easy Run';
+            icon = '🌿';
+            rpe = 5 + hillAdj;
+            pace = effPace + 20;
+          } else if (s === 2) {
+            icon = '⚡';
+            rpe = 7 + hillAdj;
+            pace = goalPace - 10 + w * 2;
+            desc = `Intervals: ${getIntervalDescription(w, level)}`;
+          } else {
+            icon = '🏃';
+            rpe = 6 + hillAdj;
+            pace = goalPace + 10;
+            desc = `Tempo Run - ${formatMinutes(20 + w * 2)}`;
+          }
+          weekSessions.push({
+            icon,
+            description: desc,
+            rpe: getRPELabel(rpe),
+            pace: formatSecondsToPace(Math.max(240, Math.round(pace)))
+          });
+        }
+        plan.push({ week: w, sessions: weekSessions });
+      }
+      return plan;
+    }
+
+    function validateInputs(curr, goal) {
+      let ok = true;
+      if (isNaN(parseTimeToSeconds(curr))) {
+        document.getElementById('currentTimeError').textContent = 'Invalid format';
+        ok = false;
+      } else {
+        document.getElementById('currentTimeError').textContent = '';
+      }
+      if (isNaN(parseTimeToSeconds(goal)) || parseTimeToSeconds(goal) <= 0) {
+        document.getElementById('goalTimeError').textContent = 'Must be positive MM:SS';
+        ok = false;
+      } else {
+        document.getElementById('goalTimeError').textContent = '';
+      }
+      return ok;
+    }
+
+    document.getElementById('generateProgramBtn').addEventListener('click', () => {
+      const distance = document.getElementById('distanceSelect').value;
+      const sessions = document.getElementById('sessionsPerWeek').value;
+      const terrain = document.getElementById('terrainType').value;
+      const level = document.getElementById('experienceLevel').value;
+      const curr = document.getElementById('currentTime').value;
+      const goal = document.getElementById('goalTime').value;
+      if (!validateInputs(curr, goal)) return;
+
+      const plan = generateRunPlan(distance, sessions, terrain, level,
+        parseTimeToSeconds(curr), parseTimeToSeconds(goal));
+
+      document.getElementById('summaryText').textContent =
+        `Distance: ${distance.toUpperCase()} | ${sessions} sessions/week | ${terrain} terrain | ${level} runner`;
+      document.getElementById('summaryPanel').classList.remove('hidden');
+
+      const container = document.getElementById('programCardsContainer');
+      container.innerHTML = '';
+      plan.forEach(week => {
+        const card = document.createElement('div');
+        card.className = 'border rounded-xl shadow p-4 bg-[#E9EAE6]';
+        let html = `<h3 class="text-xl font-bold text-[#2D4946] mb-2">Week ${week.week}</h3>`;
+        week.sessions.forEach(s => {
+          html += `
+            <div class="mb-3 p-3 bg-white rounded-lg shadow-sm">
+              <div class="flex items-center gap-2 text-lg font-semibold">${s.icon} ${s.description}</div>
+              <div class="text-sm mt-1">${s.rpe}</div>
+              <div class="text-sm text-gray-500">Target Pace: ${s.pace}/km</div>
+            </div>`;
+        });
+        card.innerHTML = html;
+        container.appendChild(card);
+      });
+
+      document.getElementById('programOutputSection').classList.remove('hidden');
+      document.getElementById('programOutputSection').scrollIntoView({behavior: 'smooth'});
+    });
+  </script>
 </body>
 </html>
