@@ -30,17 +30,10 @@
           </select>
         </div>
         <div>
-          <label class="block font-semibold mb-1">Sessions per Week (2–3 only)</label>
+          <label class="block font-semibold mb-1">Sessions per Week</label>
           <select id="sessionsPerWeek" class="w-full p-2 rounded border">
             <option value="2">2</option>
             <option value="3" selected>3</option>
-          </select>
-        </div>
-        <div>
-          <label class="block font-semibold mb-1">Program Length</label>
-          <select id="programLength" class="w-full p-2 rounded border">
-            <option value="6" selected>6 Weeks</option>
-            <option value="12">12 Weeks</option>
           </select>
         </div>
         <div>
@@ -76,25 +69,16 @@
       </div>
     </section>
 
-    <section id="summaryPanel" class="hidden text-center text-[#2D4946] mb-8">
-      <div class="text-lg font-semibold">
-        You selected: <span id="summaryText"></span>
-      </div>
-      <div class="text-sm">
-        Includes warm‑up & cool‑down, RPE, pace per km, timed sessions.
-      </div>
-    </section>
-
     <section id="programOutputSection" class="hidden bg-white p-4 md:p-6 rounded-xl shadow-lg my-12">
       <h2 class="text-2xl md:text-3xl font-bold text-center mb-6">
         Your Weekly Sessions
       </h2>
       <div id="programCardsContainer" class="space-y-6"></div>
       <p class="text-sm text-center text-[#2D4946] mt-6">
-        Warm‑up: 5‑10 min jog/walk. Cool‑down: 5‑10 min jog/walk.
+        Warm‑up: 5‑10 min jog/walk. Cool‑down: 5‑10 min jog/walk. Modify effort based on terrain and feel.
       </p>
       <div class="text-center mt-6">
-        <button id="downloadPDF" class="bg-[#FFC40B] text-black px-6 py-3 rounded-xl font-bold">
+        <button id="downloadPDF" class="bg-[#2D4946] text-white px-6 py-3 rounded-xl font-bold">
           Download PDF
         </button>
       </div>
@@ -102,31 +86,43 @@
   </div>
 
   <script>
-    const parseTimeToSeconds = (t) => {
-      if (!t.includes(':')) return NaN;
+    const feedbackStore = {};
+
+    function parseTimeToSeconds(t) {
+      if (!t || !t.includes(':')) return NaN;
       const [m, s] = t.split(':').map(Number);
       return isNaN(m) || isNaN(s) ? NaN : m * 60 + s;
-    };
+    }
 
-    const formatPace = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}/km`;
-    const rpeLabel = (r) => `RPE ${r} - ${['', '', '', '', '', 'Steady', 'Comfortable', 'Challenging', 'Hard', 'Very hard'][r]}`;
+    function formatPace(secPerKm) {
+      const m = Math.floor(secPerKm / 60), s = secPerKm % 60;
+      return `${m}:${s.toString().padStart(2, '0')}/km`;
+    }
 
-    const easyDuration = (lvl, goal) => ({
-      beginner: { '5k': '30–40 min', '10k': '40–50 min' },
-      intermediate: { '5k': '35–45 min', '10k': '45–55 min' },
-      experienced: { '5k': '40–50 min', '10k': '50–65 min' }
-    })[lvl][goal];
+    function rpeLabel(r) {
+      const map = {5: 'Steady', 6: 'Comfortable', 7: 'Challenging', 8: 'Hard', 9: 'Very hard'};
+      return `RPE ${r} - ${map[r] || 'Unknown'}`;
+    }
 
-    const intervalDescription = (week, lvl) => {
+    function easyDuration(lvl, goal) {
+      const map = {
+        beginner: { '5k': '30–40 min', '10k': '40–50 min' },
+        intermediate: { '5k': '35–45 min', '10k': '45–55 min' },
+        experienced: { '5k': '40–50 min', '10k': '50–65 min' }
+      };
+      return map[lvl]?.[goal] || '';
+    }
+
+    function intervalDescription(week, lvl) {
       const versions = {
-        beginner: ['4 × 1 min', '5 × 1 min', '6 × 1 min', '4 × 2 min', '5 × 2 min', '6 × 2 min'],
-        intermediate: ['4 × 2 min', '5 × 2 min', '4 × 3 min', '5 × 3 min', '6 × 3 min', '4 × 4 min'],
-        experienced: ['4 × 3 min', '5 × 3 min', '6 × 3 min', '4 × 4 min', '5 × 4 min', '6 × 4 min']
+        beginner: ['4 × 1 min hard, 1 min walk','5 × 1 min hard, 1 min walk','6 × 1 min hard, 1 min walk','4 × 2 min hard, 1 min walk','5 × 2 min hard, 1 min walk','6 × 2 min hard, 1 min walk'],
+        intermediate: ['4 × 2 min hard, 1 min walk','5 × 2 min hard, 1 min walk','4 × 3 min hard, 1 min jog','5 × 3 min hard, 1 min jog','6 × 3 min hard, 1 min jog','4 × 4 min hard, 1 min jog'],
+        experienced: ['4 × 3 min threshold, 1 min jog','5 × 3 min threshold, 1 min jog','6 × 3 min threshold, 1 min jog','4 × 4 min threshold, 1 min jog','5 × 4 min threshold, 1 min jog','6 × 4 min threshold, 1 min jog']
       };
       return versions[lvl][(week - 1) % 6];
-    };
+    }
 
-    const buildPlan = (dist, sess, terr, lvl, cur, goal, weeks) => {
+    function buildPlan(dist, sess, terr, lvl, cur, goal, weeks = 6) {
       const plan = [];
       const hill = terr === 'hilly' ? 1 : 0;
       const eff = cur / (dist === '10k' ? 10 : 5);
@@ -135,88 +131,67 @@
       for (let w = 1; w <= weeks; w++) {
         const weekSessions = [];
         for (let s = 1; s <= +sess; s++) {
-          let icon = '🏃', desc = '', rpe = 6, pace = eff;
+          let icon = '', desc = '', rpe = 6, pace = eff, duration = '';
+
           if (s === 1) {
-            desc = `Long Run – ${easyDuration(lvl, dist)}`;
+            duration = easyDuration(lvl, dist);
+            desc = `Long Run – ${duration}`;
             icon = '🌿'; rpe = 5 + hill; pace = eff + 30;
           } else if (s === 2) {
-            desc = `Intervals: ${intervalDescription(w, lvl)}`;
+            const interval = intervalDescription(w, lvl);
+            desc = `Intervals: ${interval}`;
+            duration = '20–30 min';
             icon = '⚡'; rpe = 7 + hill; pace = goalP - 10 + w * 2;
           } else {
-            desc = `Tempo Run – ${20 + w * 2} min`;
-            rpe = 6 + hill; pace = goalP + 10;
+            const tempMin = 20 + w * 2;
+            duration = `${tempMin} min`;
+            desc = `Tempo Run – ${duration}`;
+            icon = '🏃'; rpe = 6 + hill; pace = goalP + 10;
           }
-          weekSessions.push({ icon, description: desc, rpe: rpeLabel(rpe), pace: formatPace(Math.max(240, Math.round(pace))) });
+
+          weekSessions.push({
+            icon,
+            description: desc,
+            rpe: rpeLabel(rpe),
+            pace: formatPace(Math.max(240, Math.round(pace))),
+            duration
+          });
         }
         plan.push({ week: w, sessions: weekSessions });
       }
       return plan;
-    };
-
-    const updateMilestoneProgress = (plan) => {
-      const tracker = document.getElementById('milestoneTracker');
-      tracker.classList.remove('hidden');
-      tracker.innerHTML = '';
-      plan.forEach((week, i) => {
-        const allComplete = week.sessions.every((_, j) =>
-          document.getElementById(`week${i + 1}_session${j}`).checked
-        );
-        const item = document.createElement('span');
-        item.textContent = `Week ${i + 1} ${allComplete ? '✅' : '☐'}`;
-        item.className = 'inline-block mx-1';
-        tracker.appendChild(item);
-      });
-    };
-
-    const attachMilestoneListeners = (plan) => {
-      plan.forEach((week, i) => {
-        week.sessions.forEach((_, j) => {
-          const checkbox = document.getElementById(`week${i + 1}_session${j}`);
-          checkbox.addEventListener('change', () => updateMilestoneProgress(plan));
-        });
-      });
-    };
+    }
 
     document.getElementById('generateProgramBtn').addEventListener('click', () => {
-      const dist = distanceSelect.value;
-      const sess = sessionsPerWeek.value;
-      const terr = terrainType.value;
-      const lvl = experienceLevel.value;
-      const cur = parseTimeToSeconds(currentTime.value);
-      const goal = parseTimeToSeconds(goalTime.value);
-      const weeks = parseInt(programLength.value);
+      const dist = document.getElementById('distanceSelect').value;
+      const sess = document.getElementById('sessionsPerWeek').value;
+      const terr = document.getElementById('terrainType').value;
+      const lvl = document.getElementById('experienceLevel').value;
+      const cur = parseTimeToSeconds(document.getElementById('currentTime').value);
+      const goal = parseTimeToSeconds(document.getElementById('goalTime').value);
 
-      if (isNaN(cur) || isNaN(goal)) {
-        currentTimeError.textContent = isNaN(cur) ? 'Invalid' : '';
-        goalTimeError.textContent = isNaN(goal) ? 'Invalid' : '';
-        return;
-      }
+      if (isNaN(cur) || isNaN(goal)) return;
 
-      currentTimeError.textContent = '';
-      goalTimeError.textContent = '';
-
-      const plan = buildPlan(dist, sess, terr, lvl, cur, goal, weeks);
-      localStorage.setItem('runningProgram', JSON.stringify({ dist, sess, terr, lvl, cur, goal, weeks, plan }));
-
-      summaryText.textContent = `Distance: ${dist.toUpperCase()} | ${sess} sessions/week | ${terr} terrain | ${lvl} runner | ${weeks} weeks`;
-      summaryPanel.classList.remove('hidden');
-
+      const plan = buildPlan(dist, sess, terr, lvl, cur, goal);
       const container = document.getElementById('programCardsContainer');
       container.innerHTML = '';
-      plan.forEach(wk => {
+
+      plan.forEach((wk, i) => {
         const card = document.createElement('div');
         card.className = 'border rounded-xl shadow p-4 bg-[#E9EAE6]';
         let html = `<h3 class="text-xl font-bold text-[#2D4946] mb-2">Week ${wk.week}</h3>`;
-        wk.sessions.forEach((ls, i) => {
-          const id = `week${wk.week}_session${i}`;
+        wk.sessions.forEach((ls, j) => {
+          const id = `week${wk.week}_session${j}`;
           html += `<div class="mb-3 p-3 bg-white rounded-lg shadow-sm">
             <div class="flex justify-between items-center">
               <div>
                 <div class="flex items-center gap-2 text-lg font-semibold">${ls.icon} ${ls.description}</div>
                 <div class="text-sm mt-1">${ls.rpe}</div>
-                <div class="text-sm text-gray-500">Target Pace: ${ls.pace}</div>
+                <div class="text-sm text-gray-500">Target Pace: ${ls.pace} | Est. Duration: ${ls.duration}</div>
               </div>
-              <div><input type="checkbox" id="${id}" class="w-5 h-5 text-[#2D4946]"></div>
+              <div>
+                <input type="checkbox" id="${id}" class="w-5 h-5 text-[#2D4946]">
+              </div>
             </div>
           </div>`;
         });
@@ -224,32 +199,48 @@
         container.appendChild(card);
       });
 
-      attachMilestoneListeners(plan);
       updateMilestoneProgress(plan);
-      programOutputSection.classList.remove('hidden');
-      programOutputSection.scrollIntoView({ behavior: 'smooth' });
+      document.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => updateMilestoneProgress(plan));
+      });
+
+      document.getElementById('programOutputSection').classList.remove('hidden');
     });
 
-    window.onload = () => {
-      const saved = JSON.parse(localStorage.getItem('runningProgram'));
-      if (saved) {
-        distanceSelect.value = saved.dist;
-        sessionsPerWeek.value = saved.sess;
-        terrainType.value = saved.terr;
-        experienceLevel.value = saved.lvl;
-        currentTime.value = `${Math.floor(saved.cur/60)}:${String(saved.cur%60).padStart(2,'0')}`;
-        goalTime.value = `${Math.floor(saved.goal/60)}:${String(saved.goal%60).padStart(2,'0')}`;
-        programLength.value = saved.weeks;
-        generateProgramBtn.click();
-      }
-    };
+    function updateMilestoneProgress(plan) {
+      const tracker = document.getElementById('milestoneTracker');
+      tracker.classList.remove('hidden');
+      tracker.innerHTML = '';
+      plan.forEach((week, i) => {
+        const allComplete = week.sessions.every((_, j) => {
+          return document.getElementById(`week${i + 1}_session${j}`).checked;
+        });
+        const item = document.createElement('span');
+        item.textContent = `Week ${i + 1} ${allComplete ? '✅' : '☐'}`;
+        item.className = 'inline-block mx-1';
+        tracker.appendChild(item);
+      });
+    }
 
-    downloadPDF.addEventListener('click', () => {
+    document.getElementById('downloadPDF').addEventListener('click', () => {
       const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      doc.html(document.getElementById('programOutputSection'), {
-        callback: (pdf) => pdf.save('vikasati_running_plan.pdf'),
-        x: 10, y: 10, width: 190
+      const doc = new jsPDF('p', 'pt', 'a4');
+
+      const source = document.getElementById('programOutputSection').cloneNode(true);
+      source.querySelector('#downloadPDF')?.remove();
+
+      const container = document.createElement('div');
+      container.style.width = '800px';
+      container.appendChild(source);
+      document.body.appendChild(container);
+
+      doc.html(container, {
+        callback: (pdf) => {
+          pdf.save('vikasati_running_plan.pdf');
+          document.body.removeChild(container);
+        },
+        x: 20,
+        y: 20
       });
     });
   </script>
