@@ -23,6 +23,13 @@
     <section class="bg-white p-6 md:p-8 rounded-xl shadow-lg my-12">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
+          <label class="block font-semibold mb-1">Plan Duration</label>
+          <select id="planDuration" class="w-full p-2 rounded border">
+            <option value="6" selected>6 Weeks</option>
+            <option value="12">12 Weeks</option>
+          </select>
+        </div>
+        <div>
           <label class="block font-semibold mb-1">Distance Goal</label>
           <select id="distanceSelect" class="w-full p-2 rounded border">
             <option value="5k">5K</option>
@@ -86,8 +93,6 @@
   </div>
 
   <script>
-    const feedbackStore = {};
-
     function parseTimeToSeconds(t) {
       if (!t || !t.includes(':')) return NaN;
       const [m, s] = t.split(':').map(Number);
@@ -169,10 +174,11 @@
       const lvl = document.getElementById('experienceLevel').value;
       const cur = parseTimeToSeconds(document.getElementById('currentTime').value);
       const goal = parseTimeToSeconds(document.getElementById('goalTime').value);
+      const weeks = parseInt(document.getElementById('planDuration').value);
 
       if (isNaN(cur) || isNaN(goal)) return;
 
-      const plan = buildPlan(dist, sess, terr, lvl, cur, goal);
+      const plan = buildPlan(dist, sess, terr, lvl, cur, goal, weeks);
       const container = document.getElementById('programCardsContainer');
       container.innerHTML = '';
 
