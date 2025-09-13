@@ -102,74 +102,53 @@
       return `RPE ${r} - ${map[r] || 'Unknown'}`;
     }
 
+    function paceForSession(currentPace, goalPace, week, weeks, startFactor, endFactor) {
+      const gap = (currentPace - goalPace) / currentPace;
+      const adjust = gap > 0.2 ? 0.5 : 1; // bigger gap = more conservative progression
+      const factor = startFactor - ((startFactor - endFactor) * (week - 1) / (weeks - 1)) * adjust;
+      return currentPace * factor + goalPace * (1 - factor);
+    }
+
     function buildPlan(dist, sess, lvl, cur, goal, weeks = 6) {
       const plan = [];
-      const curPace = cur / (dist === '10k' ? 10 : 5);   // sec per km
-      const goalPace = goal / (dist === '10k' ? 10 : 5); // sec per km
+      const currentPace = cur / (dist === '10k' ? 10 : 5);
+      const goalPace = goal / (dist === '10k' ? 10 : 5);
 
       for (let w = 1; w <= weeks; w++) {
         const weekSessions = [];
 
-        // LONG RUNS
-        let longRunMin;
-        if (dist === '5k') {
-          longRunMin = lvl === 'beginner' ? 30 + w * 2 
-                      : lvl === 'intermediate' ? 35 + w * 3 
-                      : 40 + w * 4;
-        } else {
-          longRunMin = lvl === 'beginner' ? 50 + w * 3 
-                      : lvl === 'intermediate' ? 60 + w * 3 
-                      : 70 + w * 3;
-        }
+        // Long Run
+        let longPace = paceForSession(currentPace, goalPace, w, weeks, 1.15, 1.05);
+        let longDuration = dist === '10k'
+          ? `${50 + w * 3}–${65 + w * 3} min`
+          : `${40 + w * 2}–${50 + w * 2} min`;
         weekSessions.push({
           icon: '🌿',
-          description: `Long Run – ${longRunMin} min`,
-          rpe: rpeLabel(6),
-          pace: formatPace(curPace + 75),
-          duration: `${longRunMin} min`
+          description: `Long Run – ${longDuration}`,
+          rpe: rpeLabel(5),
+          pace: formatPace(Math.round(longPace)),
+          duration: longDuration
         });
 
-        // INTERVALS
-        let intervalDesc, intervalPace;
-        if (dist === '5k') {
-          intervalDesc = lvl === 'beginner'
-            ? `${3 + w} × 1 min hard, 1 min walk`
-            : lvl === 'intermediate'
-            ? `${3 + w} × 2 min hard, 90s jog`
-            : `${3 + w} × 3 min hard, 90s jog`;
-          intervalPace = goalPace - 5;
-        } else {
-          if (lvl === 'beginner') intervalDesc = `${4 + w} × 600m @ 10K pace, 90s jog`;
-          if (lvl === 'intermediate') intervalDesc = `${4 + w} × 800m @ 10K pace, 90s jog`;
-          if (lvl === 'experienced') intervalDesc = `${4 + w} × 1km @ 10K pace, 90s jog`;
-          intervalPace = goalPace;
-        }
+        // Intervals
+        let intPace = paceForSession(currentPace, goalPace, w, weeks, 0.95, 0.90);
         weekSessions.push({
           icon: '⚡',
-          description: `Intervals: ${intervalDesc}`,
-          rpe: rpeLabel(8),
-          pace: formatPace(Math.max(240, Math.round(intervalPace))),
-          duration: '20–35 min'
+          description: `Intervals – ${w + 3} × 400–800m with jog recovery`,
+          rpe: rpeLabel(7),
+          pace: formatPace(Math.round(intPace)),
+          duration: '20–30 min'
         });
 
-        // TEMPO RUN (only if 3 sessions/week)
+        // Tempo Run (only if 3 sessions)
         if (+sess === 3) {
-          let tempoMin;
-          if (dist === '5k') {
-            tempoMin = lvl === 'beginner' ? 15 + w
-                     : lvl === 'intermediate' ? 20 + w
-                     : 25 + w;
-          } else {
-            tempoMin = lvl === 'beginner' ? 15 + w * 2
-                     : lvl === 'intermediate' ? 20 + w * 2
-                     : 30 + w * 2;
-          }
+          let tempoPace = paceForSession(currentPace, goalPace, w, weeks, 1.00, 0.98);
           weekSessions.push({
             icon: '🏃',
-            description: `Tempo Run – ${tempoMin} min`,
-            rpe: rpeLabel(7),
-            pace: formatPace(goalPace + 15),
-            duration: `${tempoMin} min`
+            description: `Tempo Run – ${20 + w * 2} min`,
+            rpe: rpeLabel(6),
+            pace: formatPace(Math.round(tempoPace)),
+            duration: `${20 + w * 2} min`
           });
         }
 
